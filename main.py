@@ -23,13 +23,32 @@ def get_api_key(api_key_header: str = Security(api_key_header)):
 		raise HTTPException(status_code=403, detail="Could not validate API key")
 
 
-# Initialize the xai_sdk client with the API key
-client = xai_sdk.Client(api_key=API_KEY)
-chat = client.chat
+# Define the GrokClient class
+class GrokClient:
+
+	def __init__(self, api_key):
+		self.client = xai_sdk.Client(api_key=api_key)
+		self.chat = self.client.chat
+
+	async def gpt_request(self,
+	                      user_message,
+	                      system_message=None,
+	                      fun_mode=False):
+		conversation = self.chat.create_conversation(fun_mode=fun_mode)
+		if system_message:
+			await conversation.add_response_no_stream(system_message)
+		response = await conversation.add_response_no_stream(user_message)
+		return response.message
+
+
+# Initialize the GrokClient with the API key
+grok_client = GrokClient(api_key=API_KEY)
 
 
 class ChatRequest(BaseModel):
 	message: str
+	system_message: str = None
+	fun_mode: bool = False
 
 
 class ChatResponse(BaseModel):
@@ -43,9 +62,11 @@ class ChatResponse(BaseModel):
 async def chat_with_grok(request: ChatRequest,
                          api_key: str = Depends(get_api_key)):
 	try:
-		conversation = chat.create_conversation()
-		response = await conversation.add_response_no_stream(request.message)
-		return ChatResponse(response=response.message)
+		response_message = await grok_client.gpt_request(
+		    user_message=request.message,
+		    system_message=request.system_message,
+		    fun_mode=request.fun_mode)
+		return ChatResponse(response=response_message)
 	except Exception as e:
 		raise HTTPException(status_code=500, detail=str(e))
 
