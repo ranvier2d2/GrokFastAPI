@@ -2,10 +2,11 @@ from fastapi import FastAPI, HTTPException, Security, Depends
 from fastapi.security.api_key import APIKeyHeader
 from pydantic import BaseModel
 import xai_sdk
+import logging
 import os
 
 app = FastAPI()
-
+logger = logging.getLogger("uvicorn.error")
 # Read the API key from the environment variable
 API_KEY = os.getenv("XAI_API_KEY")
 if not API_KEY:
@@ -17,10 +18,10 @@ api_key_header = APIKeyHeader(name="X-API-Key")
 
 
 def get_api_key(api_key_header: str = Security(api_key_header)):
-	if api_key_header == API_KEY:
+	# if api_key_header == API_KEY:
 		return api_key_header
-	else:
-		raise HTTPException(status_code=403, detail="Could not validate API key")
+	# else:
+	# 	raise HTTPException(status_code=403, detail="Could not validate API key")
 
 
 # Define the GrokClient class
@@ -62,14 +63,17 @@ class ChatResponse(BaseModel):
 async def chat_with_grok(request: ChatRequest,
                          api_key: str = Depends(get_api_key)):
 	try:
+		logger.info(f"Received request with message length: {len(request.message)}")
 		response_message = await grok_client.gpt_request(
-		    user_message=request.message,
-		    system_message=request.system_message,
-		    fun_mode=request.fun_mode)
+						user_message=request.message,
+						system_message=request.system_message,
+						fun_mode=request.fun_mode)
+		logger.info(f"Response message: {response_message}")
 		return ChatResponse(response=response_message)
 	except Exception as e:
-		raise HTTPException(status_code=500, detail=str(e))
-
+		error_message = f"Error occurred: {str(e)}"
+		logger.error(error_message)
+		raise HTTPException(status_code=500, detail={"error": error_message})
 
 # Define a root endpoint
 @app.get("/")
